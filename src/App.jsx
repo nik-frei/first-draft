@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 const PHASES = { WELCOME: "welcome", INTERVIEW: "interview", OUTLINE: "outline", DRAFTING: "drafting" };
 
-const INTERVIEW_SYSTEM = `You are a world-class book editor and ghostwriter conducting a deep interview with an author to gather enough material to write a full 200-page book (approximately 50,000 words).
+const INTERVIEW_SYSTEM = `You are a world-class book editor and ghostwriter conducting a deep interview with an author to gather enough material to write a full book of approximately 40,000 words across up to 12 chapters.
 
 Your job is to ask thoughtful, probing questions one or two at a time. Be warm, encouraging, and genuinely curious. You're trying to extract:
 
@@ -20,7 +20,7 @@ IMPORTANT RULES:
 - Ask only 1-2 questions at a time. Never overwhelm with a list.
 - After each answer, briefly acknowledge what they said (showing you understood) before asking the next question.
 - If an answer is thin, probe deeper: "Can you tell me more about that?" "What's a specific example?"
-- Keep a mental model of how much material you've gathered. You need enough for ~15-20 chapters.
+- Keep a mental model of how much material you've gathered. You need enough for up to 12 chapters totaling ~40,000 words.
 - Track which topics you've covered and which need more depth.
 - After sufficient material is gathered (usually 20-35 exchanges), tell the author you have enough to create an outline and ask if they're ready to see it.
 - Be conversational and human. This should feel like talking to a brilliant editor over coffee, not filling out a form.
@@ -33,7 +33,7 @@ Format your response as a JSON object (no markdown, no backticks, no preamble) w
 {
   "title": "Suggested Book Title",
   "subtitle": "Subtitle",
-  "targetPages": 200,
+  "targetWords": 40000,
   "audienceDescription": "Who this book is for",
   "voiceNotes": "Description of the author's writing style based on how they communicated in the interview - vocabulary, tone, sentence length, formality, use of stories vs data, humor style, etc.",
   "chapters": [
@@ -42,13 +42,13 @@ Format your response as a JSON object (no markdown, no backticks, no preamble) w
       "title": "Chapter Title",
       "summary": "2-3 sentence summary of what this chapter covers",
       "keyPoints": ["point 1", "point 2", "point 3"],
-      "estimatedPages": 12,
+      "estimatedWords": 3500,
       "sourceMaterial": "Brief note on which interview answers feed into this chapter"
     }
   ]
 }
 
-Create 15-20 chapters that would realistically fill 200 pages. Include an Introduction and Conclusion. Make sure the arc is compelling and the chapters flow logically.`;
+Create 8-12 chapters that would realistically total ~40,000 words. Include an Introduction and Conclusion. Make sure the arc is compelling and the chapters flow logically.`;
 
 const DRAFT_SYSTEM = `You are a world-class ghostwriter. Write a chapter of a book based on the outline and interview material provided.
 
@@ -160,7 +160,7 @@ function WelcomeScreen({ onStart }) {
           fontFamily: "'DM Sans', Helvetica, sans-serif", fontSize: "0.95rem", color: "#8a7d70",
           lineHeight: 1.7, marginBottom: "3rem",
         }}>
-          The interview takes about 30–60 minutes. Your draft will be approximately 200 pages.
+          The interview takes about 30–60 minutes. Your draft will be approximately 40,000 words.
         </p>
         <button
           onClick={onStart}
@@ -444,7 +444,7 @@ function OutlineScreen({ outline, onApprove, loading }) {
           fontFamily: "'DM Sans', Helvetica, sans-serif", fontSize: "0.9rem",
           color: "#8a7d70", marginBottom: "2rem",
         }}>
-          {outline.targetPages} pages · {outline.chapters?.length} chapters · For: {outline.audienceDescription}
+          {outline.targetWords?.toLocaleString() || "40,000"} words · {outline.chapters?.length} chapters · For: {outline.audienceDescription}
         </div>
         <div style={{
           width: "100%", height: 1,
@@ -489,7 +489,7 @@ function OutlineScreen({ outline, onApprove, loading }) {
                 fontFamily: "'DM Sans', Helvetica, sans-serif", fontSize: "0.8rem",
                 color: "#6a5d50", marginLeft: "auto", whiteSpace: "nowrap",
               }}>
-                ~{ch.estimatedPages} pages
+                ~{(ch.estimatedWords || 3500).toLocaleString()} words
               </span>
             </div>
             <div style={{
@@ -630,10 +630,38 @@ function DraftingScreen({ outline, chapters, currentChapter, loading, streamText
               </div>
               <div style={{
                 fontFamily: "'DM Sans', Helvetica, sans-serif", fontSize: "1rem",
-                color: "#a89880", lineHeight: 1.6,
+                color: "#a89880", lineHeight: 1.6, marginBottom: "2rem",
               }}>
                 Click any chapter in the sidebar to review it.
               </div>
+              <button
+                onClick={() => {
+                  const lines = [];
+                  lines.push(outline.title.toUpperCase());
+                  if (outline.subtitle) lines.push(outline.subtitle);
+                  lines.push("\n" + "=".repeat(60) + "\n");
+                  for (let i = 0; i < outline.chapters.length; i++) {
+                    if (chapters[i]) {
+                      lines.push(chapters[i]);
+                      lines.push("\n" + "-".repeat(40) + "\n");
+                    }
+                  }
+                  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = (outline.title || "manuscript").replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "-").toLowerCase() + ".txt";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                style={{
+                  fontFamily: "'DM Sans', Helvetica, sans-serif", fontSize: "1rem", fontWeight: 500,
+                  color: "#1a1612", background: "#c4a87a", border: "none", borderRadius: 6,
+                  padding: "1rem 2.5rem", cursor: "pointer", letterSpacing: "0.05em",
+                }}
+              >
+                Download Manuscript
+              </button>
             </div>
           ) : null}
         </div>
@@ -724,7 +752,7 @@ export default function App() {
       setStreamText("");
 
       const ch = outline.chapters[i];
-      const wordsTarget = (ch.estimatedPages || 12) * 275;
+      const wordsTarget = ch.estimatedWords || 3500;
       const sysPrompt = DRAFT_SYSTEM
         .replace("{voiceNotes}", outline.voiceNotes || "Write in a natural, engaging style.")
         .replace("{targetWords}", wordsTarget.toString());
