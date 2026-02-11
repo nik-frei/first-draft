@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: first-draft
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
